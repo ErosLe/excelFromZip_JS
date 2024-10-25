@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZIP to Excel Converter</title>
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.10.21/css/jquery.dataTables.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+    <script src="https://cdn.datatables.net/1.10.21/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <style>
+        #tableContainer {
+            display: none;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>ZIP to Excel Converter</h1>
+    <input type="file" id="uploadZipButton" accept=".zip">
+    <div id="tableContainer">
+        <table id="excelTable" class="display">
+            <thead>
+                <tr>
+                    <th>Stream ID</th>
+                    <th>Stream name</th>
+                    <th>Stream type</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        document.getElementById('uploadZipButton').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            const zipData = await file.arrayBuffer();
+            const zip = await JSZip.loadAsync(zipData);
+            const data = [];
+            const zipFileName = file.name.replace('.zip', ''); // ZIP fájl neve
+
+            zip.forEach((relativePath, file) => {
+                if (file.dir) {
+                    const parts = relativePath.split('_');
+                    
+                    if (parts.length >= 3) {
+                        const streamID = parts[parts.length - 1].replace(/\/$/, ''); // Eltávolítjuk a / jelet
+                        const streamType = parts[parts.length - 2];
+                        const streamName = parts.slice(0, parts.length - 2).join('_');
+                        data.push([streamID, streamName, streamType]);
+                    }
+                }
+            });
+
+            // Excel fájl generálása
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Streams');
+
+            // Fejléc hozzáadása
+            worksheet.columns = [
+                { header: 'Stream ID', key: 'streamID', width: 30 },
+                { header: 'Stream name', key: 'streamName', width: 30 },
+                { header: 'Stream type', key: 'streamType', width: 30 },
+            ];
+
+            // Adatok hozzáadása
+            // data.forEach(row => {
+            //     worksheet.addRow({
+            //         streamID: row[0],
+            //         streamName: row[1],
+            //         streamType: row[2],
+            //     });
+            // });
+            data.forEach(row => {
+            const streamType = row[2]; // Feltételezve, hogy a "Stream type" a harmadik oszlopban van
+
+        // Csak akkor adjuk hozzá a sort, ha nem "projekt" a stream type
+            if (streamType.toLowerCase() != 'project') {
+            worksheet.addRow({
+            streamID: row[0],
+            streamName: row[1],
+            streamType: streamType // Csak akkor adjuk hozzá, ha nem projekt
+        });
+    }
+});
+
+
+            // Excel fájl letöltése
+            const excelBuffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([excelBuffer], { type: 'application/octet-stream' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${zipFileName}.xlsx`; // ZIP névvel
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+
+            // Adatok megjelenítése a táblázatban
+            const tableBody = document.querySelector('#excelTable tbody');
+            tableBody.innerHTML = ''; // Töröljük a korábbi tartalmat
+
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                row.forEach(cell => {
+                    const td = document.createElement('td');
+                    td.innerText = cell;
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+
+            // DataTable aktiválása
+            $('#excelTable').DataTable();
+            document.getElementById('tableContainer').style.display = 'block';
+        });
+    </script>
+</body>
+</html>
